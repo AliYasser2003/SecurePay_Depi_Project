@@ -1,7 +1,10 @@
+
 name: SecurePay CI
+
 permissions:
   contents: read
   id-token: write
+
 on:
   push:
     branches: [main]
@@ -45,6 +48,7 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Start SecurePay API for DAST
         run: |
           python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/securepay-api.log 2>&1 &
@@ -69,6 +73,7 @@ jobs:
             zap-baseline.py \
             -t http://127.0.0.1:8000 \
             -m 1
+
   artifact-signing:
     name: Sign and Verify Build Artifact
     needs: security-and-tests
@@ -112,7 +117,6 @@ jobs:
             "https://github.com/AliYasser2003/SecurePay_Depi_Project/.github/workflows/ci.yml@refs/heads/main" \
             --certificate-oidc-issuer \
             "https://token.actions.githubusercontent.com"
-
 
   aws-oidc-auth:
     name: Verify AWS OIDC Authentication
