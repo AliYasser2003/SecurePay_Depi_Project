@@ -128,6 +128,16 @@ jobs:
       id-token: write
 
     steps:
+      - name: Show GitHub OIDC context
+        env:
+          EXPECTED_REPOSITORY: AliYasser2003/SecurePay_Depi_Project
+          EXPECTED_BRANCH: refs/heads/main
+        run: |
+          echo "Repository: $GITHUB_REPOSITORY"
+          echo "Ref: $GITHUB_REF"
+          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
+          test "$GITHUB_REF" = "$EXPECTED_BRANCH"
+
       - name: Configure AWS credentials using OIDC
         uses: aws-actions/configure-aws-credentials@v4
         with:
