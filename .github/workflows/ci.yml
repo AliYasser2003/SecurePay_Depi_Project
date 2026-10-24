@@ -66,5 +66,4 @@ jobs:
             ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py \
             -t http://127.0.0.1:8000 \
-            -m 1 -I
-
+            -m 1
