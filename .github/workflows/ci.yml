@@ -43,3 +43,28 @@ jobs:
         uses: gitleaks/gitleaks-action@v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Start SecurePay API for DAST
+        run: |
+          python -m uvicorn app.main:app --host 127.0.0.1 --port 8000 > /tmp/securepay-api.log 2>&1 &
+          echo $! > /tmp/securepay-api.pid
+
+          for i in {1..30}; do
+            if curl --fail --silent http://127.0.0.1:8000/health; then
+              echo "SecurePay API is ready"
+              exit 0
+            fi
+            sleep 2
+          done
+
+          echo "SecurePay API failed to start"
+          cat /tmp/securepay-api.log
+          exit 1
+
+      - name: Run OWASP ZAP DAST
+        run: |
+          docker run --rm --network host \
+            ghcr.io/zaproxy/zaproxy:stable \
+            zap-baseline.py \
+            -t http://127.0.0.1:8000 \
+            -m 1 -I
+
