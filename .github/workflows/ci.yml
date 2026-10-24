@@ -67,3 +67,47 @@ jobs:
             zap-baseline.py \
             -t http://127.0.0.1:8000 \
             -m 1
+  artifact-signing:
+    name: Sign and Verify Build Artifact
+    needs: security-and-tests
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4.1.0
+
+      - name: Package source code
+        run: |
+          tar --exclude='.git' \
+              --exclude='.venv' \
+              --exclude='__pycache__' \
+              --exclude='.pytest_cache' \
+              --exclude='reports' \
+              -czf securepay-source.tar.gz \
+              app tests docs .github requirements.txt .gitignore
+
+      - name: Sign build artifact
+        run: |
+          cosign sign-blob securepay-source.tar.gz \
+            --bundle securepay-source.sigstore.json \
+            --yes
+
+      - name: Verify artifact signature
+        run: |
+          cosign verify-blob securepay-source.tar.gz \
+            --bundle securepay-source.sigstore.json \
+            --certificate-identity \
+            "https://github.com/AliYasser2003/SecurePay_Depi_Project/.github/workflows/ci.yml@refs/heads/main" \
+            --certificate-oidc-issuer \
+            "https://token.actions.githubusercontent.com"
+
