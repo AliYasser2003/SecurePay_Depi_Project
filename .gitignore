@@ -15,3 +15,5 @@ __pycache__/
 # Local tooling
 .idea/
 .vscode/
+# Generated security reports
+reports/
