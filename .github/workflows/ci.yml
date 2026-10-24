@@ -118,6 +118,16 @@ jobs:
             --certificate-oidc-issuer \
             "https://token.actions.githubusercontent.com"
 
+  aws-oidc-auth:
+    name: Verify AWS OIDC Authentication
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    permissions:
+      contents: read
+      id-token: write
+
+    steps:
       - name: Diagnose GitHub OIDC claims
         uses: actions/github-script@v7
         with:
@@ -132,25 +142,6 @@ jobs:
             console.log('OIDC subject:', payload.sub);
             console.log('OIDC repository:', payload.repository);
             console.log('OIDC ref:', payload.ref);
-  aws-oidc-auth:
-    name: Verify AWS OIDC Authentication
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-
-    permissions:
-      contents: read
-      id-token: write
-
-    steps:
-      - name: Show GitHub OIDC context
-        env:
-          EXPECTED_REPOSITORY: AliYasser2003/SecurePay_Depi_Project
-          EXPECTED_BRANCH: refs/heads/main
-        run: |
-          echo "Repository: $GITHUB_REPOSITORY"
-          echo "Ref: $GITHUB_REF"
-          test "$GITHUB_REPOSITORY" = "$EXPECTED_REPOSITORY"
-          test "$GITHUB_REF" = "$EXPECTED_BRANCH"
 
       - name: Configure AWS credentials using OIDC
         uses: aws-actions/configure-aws-credentials@v4
