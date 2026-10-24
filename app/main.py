@@ -9,6 +9,13 @@ app = FastAPI(
 )
 
 
+@app.middleware("http")
+async def add_security_headers(request, call_next):
+    response = await call_next(request)
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    return response
+
+
 class PaymentRequest(BaseModel):
     amount: float = Field(gt=0, le=10000)
     currency: str = Field(min_length=3, max_length=3)
