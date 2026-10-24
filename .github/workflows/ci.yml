@@ -117,6 +117,7 @@ jobs:
             "https://github.com/AliYasser2003/SecurePay_Depi_Project/.github/workflows/ci.yml@refs/heads/main" \
             --certificate-oidc-issuer \
             "https://token.actions.githubusercontent.com"
+
       - name: Diagnose GitHub OIDC claims
         uses: actions/github-script@v7
         with:
@@ -127,7 +128,7 @@ jobs:
             );
 
             console.log('OIDC issuer:', payload.iss);
-            console.log('OIDC audience:', payload.aud);
+            console.log('OIDC audience:', JSON.stringify(payload.aud));
             console.log('OIDC subject:', payload.sub);
             console.log('OIDC repository:', payload.repository);
             console.log('OIDC ref:', payload.ref);
