@@ -66,13 +66,15 @@ jobs:
           cat /tmp/securepay-api.log
           exit 1
 
+    
       - name: Run OWASP ZAP DAST
         run: |
           docker run --rm --network host \
             ghcr.io/zaproxy/zaproxy:stable \
             zap-baseline.py \
             -t http://127.0.0.1:8000 \
-            -m 1
+            -m 1 \
+            -I
 
   artifact-signing:
     name: Sign and Verify Build Artifact
