@@ -1,0 +1,237 @@
+AWSTemplateFormatVersion: "2010-09-09"
+
+Description: >
+  SecurePay Week 2 - API, Identity and Serverless Security.
+  Native AWS CloudFormation implementation.
+
+Parameters:
+  DeploymentBucket:
+    Type: String
+    Description: S3 bucket containing the packaged Lambda deployment artifact
+  ProjectName:
+    Type: String
+    Default: securepay-week2
+
+Resources:
+
+  # 1. Cognito User Pool
+  SecurePayUserPool:
+    Type: AWS::Cognito::UserPool
+    Properties:
+      UserPoolName: !Sub "${ProjectName}-users"
+
+      UsernameAttributes:
+        - email
+
+      AutoVerifiedAttributes:
+        - email
+
+      Policies:
+        PasswordPolicy:
+          MinimumLength: 12
+          RequireLowercase: true
+          RequireUppercase: true
+          RequireNumbers: true
+          RequireSymbols: true
+          TemporaryPasswordValidityDays: 7
+
+  # 2. Cognito Application Client
+  SecurePayUserPoolClient:
+    Type: AWS::Cognito::UserPoolClient
+    Properties:
+      ClientName: securepay-api-client
+      UserPoolId: !Ref SecurePayUserPool
+
+      GenerateSecret: false
+
+      PreventUserExistenceErrors: ENABLED
+
+      ExplicitAuthFlows:
+        - ALLOW_USER_SRP_AUTH
+        - ALLOW_USER_PASSWORD_AUTH
+        - ALLOW_REFRESH_TOKEN_AUTH
+
+      AccessTokenValidity: 60
+      IdTokenValidity: 60
+      RefreshTokenValidity: 30
+
+      TokenValidityUnits:
+        AccessToken: minutes
+        IdToken: minutes
+        RefreshToken: days
+
+  # 3. Lambda Execution Role
+  PaymentFunctionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub "${ProjectName}-lambda-role"
+
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+
+  # 4. Payment Lambda
+  PaymentFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: !Sub "${ProjectName}-payment"
+      Runtime: python3.12
+      Handler: handler.lambda_handler
+      Role: !GetAtt PaymentFunctionRole.Arn
+      Timeout: 10
+      MemorySize: 128
+
+      Code:
+        S3Bucket: !Ref DeploymentBucket
+        S3Key: week2/payment-function.zip
+  # 5. API Gateway REST API
+  SecurePayApi:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Name: !Sub "${ProjectName}-api"
+      Description: SecurePay payment simulation API
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+
+  # 6. API Gateway Cognito Authorizer
+  SecurePayAuthorizer:
+    Type: AWS::ApiGateway::Authorizer
+    Properties:
+      Name: SecurePayCognitoAuthorizer
+      RestApiId: !Ref SecurePayApi
+      Type: COGNITO_USER_POOLS
+      IdentitySource: method.request.header.Authorization
+      ProviderARNs:
+        - !GetAtt SecurePayUserPool.Arn
+
+  # 7. Payment Resource
+  PaymentResource:
+    Type: AWS::ApiGateway::Resource
+    Properties:
+      RestApiId: !Ref SecurePayApi
+      ParentId: !GetAtt SecurePayApi.RootResourceId
+      PathPart: payments
+
+  # 8. Request Model
+  PaymentRequestModel:
+    Type: AWS::ApiGateway::Model
+    Properties:
+      RestApiId: !Ref SecurePayApi
+      ContentType: application/json
+      Name: PaymentRequest
+      Schema:
+        "$schema": http://json-schema.org/draft-04/schema#
+        title: PaymentRequest
+        type: object
+        required:
+          - amount
+          - currency
+        properties:
+          amount:
+            type: number
+            minimum: 0
+            exclusiveMinimum: true
+            maximum: 1000000
+          currency:
+            type: string
+            pattern: "^[A-Z]{3}$"
+
+  # 9. Request Validator
+  PaymentRequestValidator:
+    Type: AWS::ApiGateway::RequestValidator
+    Properties:
+      RestApiId: !Ref SecurePayApi
+      Name: ValidatePaymentBody
+      ValidateRequestBody: true
+      ValidateRequestParameters: false
+
+  # 10. POST /payments
+  PaymentMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      RestApiId: !Ref SecurePayApi
+      ResourceId: !Ref PaymentResource
+      HttpMethod: POST
+      AuthorizationType: COGNITO_USER_POOLS
+      AuthorizerId: !Ref SecurePayAuthorizer
+      ApiKeyRequired: false
+
+      RequestModels:
+        application/json: !Ref PaymentRequestModel
+
+      RequestValidatorId: !Ref PaymentRequestValidator
+
+      Integration:
+        Type: AWS_PROXY
+        IntegrationHttpMethod: POST
+        Uri: !Sub
+          - arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations
+          - FunctionArn: !GetAtt PaymentFunction.Arn
+
+      MethodResponses:
+        - StatusCode: "200"
+        - StatusCode: "201"
+        - StatusCode: "400"
+        - StatusCode: "401"
+        - StatusCode: "405"
+
+  # 11. Permit API Gateway to invoke Lambda
+  PaymentFunctionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref PaymentFunction
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub
+        arn:${AWS::Partition}:execute-api:${AWS::Region}:${AWS::AccountId}:${SecurePayApi}/*/POST/payments
+
+  # 12. API Deployment
+  SecurePayApiDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - PaymentMethod
+    Properties:
+      RestApiId: !Ref SecurePayApi
+      Description: SecurePay Week 2 deployment
+
+  # 13. API Stage
+  SecurePayApiStage:
+    Type: AWS::ApiGateway::Stage
+    Properties:
+      RestApiId: !Ref SecurePayApi
+      DeploymentId: !Ref SecurePayApiDeployment
+      StageName: dev
+
+      MethodSettings:
+        - ResourcePath: "/*"
+          HttpMethod: "*"
+          ThrottlingBurstLimit: 10
+          ThrottlingRateLimit: 5
+
+Outputs:
+  ApiUrl:
+    Description: SecurePay payment API endpoint
+    Value: !Sub
+      https://${SecurePayApi}.execute-api.${AWS::Region}.${AWS::URLSuffix}/dev/payments
+
+  UserPoolId:
+    Description: Cognito User Pool ID
+    Value: !Ref SecurePayUserPool
+
+  UserPoolClientId:
+    Description: Cognito application client ID
+    Value: !Ref SecurePayUserPoolClient
+
+  PaymentFunctionName:
+    Description: Payment Lambda function name
+    Value: !Ref PaymentFunction
