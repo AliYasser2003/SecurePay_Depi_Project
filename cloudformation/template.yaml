@@ -236,6 +236,10 @@ Outputs:
     Description: Payment Lambda function name
     Value: !Ref PaymentFunction
 
+  WebACLArn:
+    Description: SecurePay AWS WAF Web ACL ARN
+    Value: !GetAtt SecurePayWebACL.Arn
+
 
   # 14. AWS WAF Web ACL
   SecurePayWebACL:
