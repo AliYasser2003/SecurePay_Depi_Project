@@ -235,3 +235,68 @@ Outputs:
   PaymentFunctionName:
     Description: Payment Lambda function name
     Value: !Ref PaymentFunction
+
+
+  # 14. AWS WAF Web ACL
+  SecurePayWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub "${ProjectName}-waf"
+      Scope: REGIONAL
+      Description: SecurePay API protection
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        CloudWatchMetricsEnabled: true
+        MetricName: SecurePayWebACL
+        SampledRequestsEnabled: true
+
+      Rules:
+        - Name: AWSCommonRuleSet
+          Priority: 1
+          OverrideAction:
+            Count: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: CommonRuleSet
+            SampledRequestsEnabled: true
+
+        - Name: AWSKnownBadInputs
+          Priority: 2
+          OverrideAction:
+            Count: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: KnownBadInputs
+            SampledRequestsEnabled: true
+
+        - Name: AWSSQLiProtection
+          Priority: 3
+          OverrideAction:
+            Count: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesSQLiRuleSet
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: SQLiProtection
+            SampledRequestsEnabled: true
+
+  # 15. Associate WAF with API Gateway dev stage
+  SecurePayWebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    DependsOn:
+      - SecurePayApiStage
+    Properties:
+      WebACLArn: !GetAtt SecurePayWebACL.Arn
+      ResourceArn: !Sub
+        arn:${AWS::Partition}:apigateway:${AWS::Region}::/restapis/${SecurePayApi}/stages/${SecurePayApiStage}
