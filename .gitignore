@@ -28,3 +28,11 @@ cloudformation/build/
 
 # Generated deployment package
 cloudformation/payment-function.zip
+
+# Local OAuth testing environment
+auth/venv/
+serverless/src/handler.py.bak
+
+# Temporary terminal output files
+/cloudformation deploy \/
+wafv2 get-web-acl \

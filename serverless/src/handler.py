@@ -19,6 +19,27 @@ def lambda_handler(event, context):
     if event.get("httpMethod") != "POST":
         return response(405, {"error": "Method not allowed"})
 
+    # RBAC: read Cognito groups from API Gateway's verified authorizer claims.
+    claims = (
+        event.get("requestContext", {})
+        .get("authorizer", {})
+        .get("claims", {})
+    )
+    groups_claim = claims.get("cognito:groups", [])
+
+    if isinstance(groups_claim, str):
+        try:
+            groups = set(json.loads(groups_claim))
+        except (json.JSONDecodeError, TypeError):
+            groups = {g.strip() for g in groups_claim.split(",") if g.strip()}
+    elif isinstance(groups_claim, list):
+        groups = set(groups_claim)
+    else:
+        groups = set()
+
+    if "customers" not in groups and "admins" not in groups:
+        return response(403, {"error": "User is not assigned to an authorized group"})
+
     try:
         body = json.loads(event.get("body") or "")
     except (json.JSONDecodeError, TypeError):

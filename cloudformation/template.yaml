@@ -35,16 +35,32 @@ Resources:
           RequireSymbols: true
           TemporaryPasswordValidityDays: 7
 
-  # 2. Cognito Application Client
+  # 2. Cognito Application Client - OAuth 2.0 / OIDC + PKCE
   SecurePayUserPoolClient:
     Type: AWS::Cognito::UserPoolClient
     Properties:
       ClientName: securepay-api-client
       UserPoolId: !Ref SecurePayUserPool
 
+      # Public client: PKCE protects the authorization code flow.
       GenerateSecret: false
-
       PreventUserExistenceErrors: ENABLED
+
+      AllowedOAuthFlowsUserPoolClient: true
+      AllowedOAuthFlows:
+        - code
+      AllowedOAuthScopes:
+        - openid
+        - email
+        - profile
+
+      CallbackURLs:
+        - http://localhost:8000/callback
+      LogoutURLs:
+        - http://localhost:8000/logout
+
+      SupportedIdentityProviders:
+        - COGNITO
 
       ExplicitAuthFlows:
         - ALLOW_USER_SRP_AUTH
@@ -59,7 +75,27 @@ Resources:
         AccessToken: minutes
         IdToken: minutes
         RefreshToken: days
+  # RBAC: Customer and Administrator groups
+  SecurePayCustomersGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: customers
+      Description: SecurePay customer users
+      UserPoolId: !Ref SecurePayUserPool
 
+  SecurePayAdminsGroup:
+    Type: AWS::Cognito::UserPoolGroup
+    Properties:
+      GroupName: admins
+      Description: SecurePay administrator users
+      UserPoolId: !Ref SecurePayUserPool
+
+  # 3. Cognito Hosted UI Domain
+  SecurePayUserPoolDomain:
+    Type: AWS::Cognito::UserPoolDomain
+    Properties:
+      Domain: !Sub "${ProjectName}-107759015479"
+      UserPoolId: !Ref SecurePayUserPool
   # 3. Lambda Execution Role
   PaymentFunctionRole:
     Type: AWS::IAM::Role
@@ -175,7 +211,7 @@ Resources:
         Type: AWS_PROXY
         IntegrationHttpMethod: POST
         Uri: !Sub
-          - arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations
+          - "arn:${AWS::Partition}:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${FunctionArn}/invocations"
           - FunctionArn: !GetAtt PaymentFunction.Arn
 
       MethodResponses:
@@ -218,6 +254,70 @@ Resources:
           ThrottlingBurstLimit: 10
           ThrottlingRateLimit: 5
 
+
+  # 14. AWS WAF Web ACL
+  SecurePayWebACL:
+    Type: AWS::WAFv2::WebACL
+    Properties:
+      Name: !Sub "${ProjectName}-waf"
+      Scope: REGIONAL
+      Description: SecurePay API protection
+      DefaultAction:
+        Allow: {}
+      VisibilityConfig:
+        CloudWatchMetricsEnabled: true
+        MetricName: SecurePayWebACL
+        SampledRequestsEnabled: true
+
+      Rules:
+        - Name: AWSCommonRuleSet
+          Priority: 1
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesCommonRuleSet
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: CommonRuleSet
+            SampledRequestsEnabled: true
+
+        - Name: AWSKnownBadInputs
+          Priority: 2
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesKnownBadInputsRuleSet
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: KnownBadInputs
+            SampledRequestsEnabled: true
+
+        - Name: AWSSQLiProtection
+          Priority: 3
+          OverrideAction:
+            None: {}
+          Statement:
+            ManagedRuleGroupStatement:
+              VendorName: AWS
+              Name: AWSManagedRulesSQLiRuleSet
+          VisibilityConfig:
+            CloudWatchMetricsEnabled: true
+            MetricName: SQLiProtection
+            SampledRequestsEnabled: true
+
+  # 15. Associate WAF with API Gateway dev stage
+  SecurePayWebACLAssociation:
+    Type: AWS::WAFv2::WebACLAssociation
+    DependsOn:
+      - SecurePayApiStage
+    Properties:
+      WebACLArn: !GetAtt SecurePayWebACL.Arn
+      ResourceArn: !Sub
+        arn:${AWS::Partition}:apigateway:${AWS::Region}::/restapis/${SecurePayApi}/stages/${SecurePayApiStage}
 Outputs:
   ApiUrl:
     Description: SecurePay payment API endpoint
@@ -239,68 +339,3 @@ Outputs:
   WebACLArn:
     Description: SecurePay AWS WAF Web ACL ARN
     Value: !GetAtt SecurePayWebACL.Arn
-
-
-  # 14. AWS WAF Web ACL
-  SecurePayWebACL:
-    Type: AWS::WAFv2::WebACL
-    Properties:
-      Name: !Sub "${ProjectName}-waf"
-      Scope: REGIONAL
-      Description: SecurePay API protection
-      DefaultAction:
-        Allow: {}
-      VisibilityConfig:
-        CloudWatchMetricsEnabled: true
-        MetricName: SecurePayWebACL
-        SampledRequestsEnabled: true
-
-      Rules:
-        - Name: AWSCommonRuleSet
-          Priority: 1
-          OverrideAction:
-            Count: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesCommonRuleSet
-          VisibilityConfig:
-            CloudWatchMetricsEnabled: true
-            MetricName: CommonRuleSet
-            SampledRequestsEnabled: true
-
-        - Name: AWSKnownBadInputs
-          Priority: 2
-          OverrideAction:
-            Count: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesKnownBadInputsRuleSet
-          VisibilityConfig:
-            CloudWatchMetricsEnabled: true
-            MetricName: KnownBadInputs
-            SampledRequestsEnabled: true
-
-        - Name: AWSSQLiProtection
-          Priority: 3
-          OverrideAction:
-            Count: {}
-          Statement:
-            ManagedRuleGroupStatement:
-              VendorName: AWS
-              Name: AWSManagedRulesSQLiRuleSet
-          VisibilityConfig:
-            CloudWatchMetricsEnabled: true
-            MetricName: SQLiProtection
-            SampledRequestsEnabled: true
-
-  # 15. Associate WAF with API Gateway dev stage
-  SecurePayWebACLAssociation:
-    Type: AWS::WAFv2::WebACLAssociation
-    DependsOn:
-      - SecurePayApiStage
-    Properties:
-      WebACLArn: !GetAtt SecurePayWebACL.Arn
-      ResourceArn: !Sub
-        arn:${AWS::Partition}:apigateway:${AWS::Region}::/restapis/${SecurePayApi}/stages/${SecurePayApiStage}

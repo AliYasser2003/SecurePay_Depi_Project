@@ -1,0 +1,80 @@
+{
+    "WebACL": {
+        "Name": "securepay-week2-waf",
+        "Id": "346eb3dd-8cac-4619-9790-cfbb6c22f425",
+        "ARN": "arn:aws:wafv2:us-east-1:107759015479:regional/webacl/securepay-week2-waf/346eb3dd-8cac-4619-9790-cfbb6c22f425",
+        "DefaultAction": {
+            "Allow": {}
+        },
+        "Description": "SecurePay API protection",
+        "Rules": [
+            {
+                "Name": "AWSCommonRuleSet",
+                "Priority": 1,
+                "Statement": {
+                    "ManagedRuleGroupStatement": {
+                        "VendorName": "AWS",
+                        "Name": "AWSManagedRulesCommonRuleSet"
+                    }
+                },
+                "OverrideAction": {
+                    "Count": {}
+                },
+                "VisibilityConfig": {
+                    "SampledRequestsEnabled": true,
+                    "CloudWatchMetricsEnabled": true,
+                    "MetricName": "CommonRuleSet"
+                }
+            },
+            {
+                "Name": "AWSKnownBadInputs",
+                "Priority": 2,
+                "Statement": {
+                    "ManagedRuleGroupStatement": {
+                        "VendorName": "AWS",
+                        "Name": "AWSManagedRulesKnownBadInputsRuleSet"
+                    }
+                },
+                "OverrideAction": {
+                    "Count": {}
+                },
+                "VisibilityConfig": {
+                    "SampledRequestsEnabled": true,
+                    "CloudWatchMetricsEnabled": true,
+                    "MetricName": "KnownBadInputs"
+                }
+            },
+            {
+                "Name": "AWSSQLiProtection",
+                "Priority": 3,
+                "Statement": {
+                    "ManagedRuleGroupStatement": {
+                        "VendorName": "AWS",
+                        "Name": "AWSManagedRulesSQLiRuleSet"
+                    }
+                },
+                "OverrideAction": {
+                    "Count": {}
+                },
+                "VisibilityConfig": {
+                    "SampledRequestsEnabled": true,
+                    "CloudWatchMetricsEnabled": true,
+                    "MetricName": "SQLiProtection"
+                }
+            }
+        ],
+        "VisibilityConfig": {
+            "SampledRequestsEnabled": true,
+            "CloudWatchMetricsEnabled": true,
+            "MetricName": "SecurePayWebACL"
+        },
+        "Capacity": 1100,
+        "ManagedByFirewallManager": false,
+        "LabelNamespace": "awswaf:107759015479:webacl:securepay-week2-waf:",
+        "RetrofittedByFirewallManager": false,
+        "OnSourceDDoSProtectionConfig": {
+            "ALBLowReputationMode": "ACTIVE_UNDER_DDOS"
+        }
+    },
+    "LockToken": "7f0d0c8c-a686-4629-8ae0-38062d87c10e"
+}
